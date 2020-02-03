@@ -2,17 +2,23 @@
 
 username=$1
 password=$2
-IMAGE=vitens/ecida/ecida-poc
+IMAGE=vitens/ecida/ecida-ds-sample-project
 REGISTRY=https://registry.gitlab.com
 TAG=latest
-SCOPE=repository:$IMAGE:*
 
 # Docker stuff
-#TOKEN=$(curl -s "https://$username:$password@gitlab.com/jwt/auth?service=container_registry&scope=$SCOPE" | jq -r .token)
-#CONFIG_DIGEST=$(curl -s -H"Accept: application/vnd.docker.distribution.manifest.v2+json" -H"Authorization: Bearer $TOKEN" "$REGISTRY/v2/$IMAGE/manifests/$TAG" | jq -r .config.digest)
-#LABELS=$(curl -sL -H"Authorization: Bearer $TOKEN" "$REGISTRY/v2/$IMAGE/blobs/$CONFIG_DIGEST" | jq -r .container_config.Labels)
-#echo $LABELS
+theprojid=15478471
+IMAGE=$(curl -X GET -s -H "PRIVATE-TOKEN: $password" -H "Content-Type: application/json" https://gitlab.com/api/v4/projects/${theprojid}/registry/repositories | jq '.[0] | .path' | sed -e 's/"//g')
 
+SCOPE=repository:$IMAGE:*
+echo $IMAGE 
+TOKEN=$(curl -s "https://$username:$password@gitlab.com/jwt/auth?service=container_registry&scope=$SCOPE" | jq -r .token)
+#echo $(curl -s -H"Accept: application/vnd.docker.distribution.manifest.v2+json" -H"Authorization: Bearer $TOKEN" "$REGISTRY/v2/$IMAGE/manifests/$TAG")
+
+CONFIG_DIGEST=$(curl -s -H"Accept: application/vnd.docker.distribution.manifest.v2+json" -H"Authorization: Bearer $TOKEN" "$REGISTRY/v2/$IMAGE/manifests/$TAG" | jq -r .config.digest)
+LABELS=$(curl -sL -H"Authorization: Bearer $TOKEN" "$REGISTRY/v2/$IMAGE/blobs/$CONFIG_DIGEST" | jq -r .container_config.Labels)
+
+exit
 
 initializeRepository() {
   preConditions=$(echo "$1" | tr '\n' ' ' | tr '"' "'")
@@ -23,6 +29,7 @@ initializeRepository() {
   TEMPLATE_PROJECT_ID=$(curl -sL -H "PRIVATE-TOKEN: $password" https://gitlab.com/api/v4/groups/vitens/projects\?include_subgroups=true | jq '.[] | select(.namespace.full_path=="vitens/ecida/templates")| select(.name=="base") | .id')
   GROUP_LEVEL_TEMPLATE_GROUP_ID=6577332
   PROJECT_ID=$(curl -sL -H "PRIVATE-TOKEN: $password" -X POST "https://gitlab.com/api/v4/projects?name=$imageName&namespace_id=$NAMESPACE_ID&template_project_id=$TEMPLATE_PROJECT_ID&use_custom_template=true&group_with_project_templates_id=$GROUP_LEVEL_TEMPLATE_GROUP_ID" | jq .id)
+  
   echo "\n\nTriggering build for $PROJECT_ID ($imageName)"
 
   # Wait until the import is done
